@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 import torch
 import torch.nn as nn
@@ -210,8 +211,20 @@ def train_model(model, model_name):
         history['val_loss'].append(val_loss)
         
         print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {epoch_loss:.4f} - Acc: {epoch_acc:.4f} | Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
-        
-    return history
+    
+    # 최종 검증 데이터에 대한 예측값 수집 (혼동 행렬용)
+    all_preds = []
+    all_labels = []
+    model.eval()
+    with torch.no_grad():
+        for inputs, labels in val_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs, 1)
+            all_preds.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+            
+    return history, all_labels, all_preds
 
 def plot_results(history, title):
     epochs_range = range(1, len(history['accuracy']) + 1)
@@ -235,7 +248,20 @@ def plot_results(history, title):
     filename = f"{title}_result.png"
     plt.savefig(filename)
     print(f"[Info] 그래프 저장 완료: {filename}")
-    plt.show()
+    # plt.show() # 파일 저장만 하고 창은 띄우지 않음 (자동화를 위해)
+
+def plot_confusion_matrix_custom(y_true, y_pred, classes, title):
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+    
+    plt.figure(figsize=(8, 6))
+    disp.plot(cmap=plt.cm.Blues, values_format='d')
+    plt.title(f'{title} Confusion Matrix')
+    
+    filename = f"{title}_confusion_matrix.png"
+    plt.savefig(filename)
+    print(f"[Info] 혼동 행렬 저장 완료: {filename}")
+    # plt.show()
 
 # ==========================================
 # 5. 실행
@@ -244,14 +270,16 @@ num_classes = len(class_names)
 
 # 과제 1 실행
 cnn_model = SimpleCNN(num_classes)
-cnn_history = train_model(cnn_model, "Task1_CNN")
+cnn_history, cnn_labels, cnn_preds = train_model(cnn_model, "Task1_CNN")
 plot_results(cnn_history, "Task1_CNN")
+plot_confusion_matrix_custom(cnn_labels, cnn_preds, class_names, "Task1_CNN")
 
 print("\n------------------------------------------\n")
 
 # 과제 2 실행
 resnet_model = get_resnet50(num_classes)
-resnet_history = train_model(resnet_model, "Task2_ResNet50")
+resnet_history, resnet_labels, resnet_preds = train_model(resnet_model, "Task2_ResNet50")
 plot_results(resnet_history, "Task2_ResNet50")
+plot_confusion_matrix_custom(resnet_labels, resnet_preds, class_names, "Task2_ResNet50")
 
 print("\n[Done] 모든 작업이 완료되었습니다.")
